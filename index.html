@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPD 影像裁切工作台</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    <style>
+        :root { 
+            --primary-bg: #f1f5f9;
+            --sidebar-bg: #ffffff;
+            --accent-color: #2563eb; 
+            --text-main: #0f172a;
+            --text-sub: #64748b;
+            --border-color: #e2e8f0;
+            --sidebar-width: 280px;
+            --success-color: #10b981;
+            --danger-color: #e11d48;
+        }
+
+        body { 
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex; 
+            height: 100vh; 
+            margin: 0; 
+            background: var(--primary-bg);
+            color: var(--text-main);
+            overflow: hidden;
+        }
+        
+        /* 側邊欄切換按鈕 */
+        .toggle-sidebar-btn {
+            position: fixed; top: 12px; left: 12px; z-index: 1000;
+            background: var(--accent-color); color: white; border: none;
+            width: 38px; height: 38px; border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; font-size: 20px;
+            transition: background 0.2s;
+        }
+        /* 修改：側邊欄按鈕按下後變灰色 */
+        .toggle-sidebar-btn:active {
+            background: #666666 !important;
+            color: white !important;
+        }
+
+        .sidebar { 
+            width: var(--sidebar-width); background: var(--sidebar-bg); 
+            padding: 12px 16px; border-right: 1px solid var(--border-color); 
+            display: flex; flex-direction: column; gap: 6px; 
+            box-shadow: 2px 0 10px rgba(0,0,0,0.05); z-index: 500;
+            overflow-y: auto; transition: transform 0.3s ease, margin-left 0.3s ease;
+        }
+
+        .sidebar.collapsed { margin-left: calc(var(--sidebar-width) * -1); }
+
+        .sidebar-header { display: flex; align-items: center; padding-left: 45px; min-height: 40px; margin-bottom: 5px; }
+        .sidebar h2 { font-size: 1.1rem; font-weight: 800; color: var(--accent-color); margin: 0; white-space: nowrap; }
+        .sidebar h3 { font-size: 0.7rem; color: var(--text-sub); text-transform: uppercase; margin: 4px 0 2px 0; }
+        
+        button { 
+            padding: 8px 12px; cursor: pointer; background: #fff; 
+            border: 1px solid var(--border-color); border-radius: 8px; 
+            text-align: left; transition: 0.2s; font-size: 0.85rem;
+            width: 100%; display: flex; align-items: center;
+        }
+
+        button:hover { border-color: var(--accent-color); background: #f8fafc; }
+        button.active { background: var(--accent-color); color: white; border-color: var(--accent-color); }
+
+        .icon-box { width: 30px; display: flex; justify-content: center; align-items: center; margin-right: 10px; flex-shrink: 0; }
+        .ratio-icon { border: 1.5px solid currentColor; border-radius: 2px; position: relative; }
+
+        .icon-id-portrait { width: 14px; height: 18px; overflow: hidden; }
+        .icon-id-portrait::before { content: ''; position: absolute; top: 3px; left: 50%; transform: translateX(-50%); width: 6px; height: 6px; background-color: currentColor; border-radius: 50%; }
+        .icon-id-portrait::after { content: ''; position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 11px; height: 8px; background-color: currentColor; border-radius: 4px 4px 0 0; }
+
+        .icon-2-1 { width: 20px; height: 10px; }
+        .icon-1-2 { width: 10px; height: 20px; }
+        .icon-4-3 { width: 18px; height: 13.5px; }
+        .icon-3-4 { width: 13.5px; height: 18px; }
+
+        .upload-group { display: flex; gap: 6px; }
+        .btn-upload { background: #eff6ff; border: 2px dashed var(--accent-color); color: var(--accent-color); text-align: center; font-weight: 600; flex: 3; justify-content: center; }
+        .btn-clear { background: #fff1f2; border: 1px solid #fda4af; color: var(--danger-color); text-align: center; flex: 1.2; justify-content: center; }
+
+        .custom-ratio-group { display: flex; align-items: center; gap: 6px; }
+        .custom-ratio-group input { width: 45px; padding: 6px; border: 1px solid var(--border-color); border-radius: 6px; text-align: center; font-size: 0.85rem; }
+        .btn-apply { background: #666666; color: white; border: none; padding: 8px; text-align: center; justify-content: center; flex: 1; }
+        .btn-apply:hover { background: #333333; }
+        .btn-apply:active { background: var(--danger-color) !important; color: #ffffff !important; transform: scale(0.95); }
+
+        .btn-download { margin-top: 8px; background: var(--success-color); color: white; border: none; font-weight: 700; text-align: center; padding: 12px; justify-content: center; }
+        .btn-download:hover { background: #059669; }
+        .btn-download:active { background: var(--danger-color) !important; color: #ffffff !important; transform: scale(0.98); }
+
+        .main-content { flex: 1; display: flex; align-items: center; justify-content: center; padding: 15px; position: relative; }
+        .img-container { width: 100%; height: 100%; background: #e2e8f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
+        #placeholder-text { color: #64748b; font-weight: 500; position: absolute; z-index: 1; }
+        #target-image { display: block; max-width: 100%; max-height: 100%; opacity: 0; }
+
+        #upload-input { display: none; }
+
+        /* 全螢幕預覽樣式 */
+        #result-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); z-index: 2000;
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            padding: 20px; box-sizing: border-box;
+        }
+
+        #modal-img {
+            max-width: 100%; max-height: 60vh; 
+            border: 2px solid white; margin-bottom: 20px; object-fit: contain;
+            -webkit-touch-callout: default !important; pointer-events: auto !important;
+        }
+
+        /* 修改：複製按鈕樣式與按下後的紅底白字 */
+        .btn-copy { 
+            background: #3b82f6; color: white; border: none; 
+            padding: 12px 24px; border-radius: 8px; font-weight: bold; 
+            margin-bottom: 10px; width: auto; transition: background 0.2s;
+            justify-content: center;
+        }
+        .btn-copy:active {
+            background: var(--danger-color) !important;
+            color: white !important;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar { position: fixed; height: 100%; gap: 4px; padding: 10px; }
+            button { padding: 6px 10px; font-size: 0.8rem; }
+            .btn-download { padding: 10px; margin-top: 5px; }
+            .icon-box { width: 25px; margin-right: 6px; }
+        }
+    </style>
+</head>
+<body>
+
+<button class="toggle-sidebar-btn" onclick="toggleSidebar()" title="切換選單">☰</button>
+
+<div class="sidebar" id="sidebar">
+    <div class="sidebar-header"><h2>EPD Crop Tool</h2></div>
+    <h3>Step 1. 上傳檔案</h3>
+    <div class="upload-group">
+        <button class="btn-upload" onclick="document.getElementById('upload-input').click()">上傳照片</button>
+        <button class="btn-clear" onclick="clearImage()">清除</button>
+    </div>
+    <input type="file" id="upload-input" accept="image/*">
+
+    <h3>Step 2. 裁切比例設定</h3>
+    <button class="ratio-btn active" onclick="setRatio(35/45, this)"><div class="icon-box"><span class="ratio-icon icon-id-portrait"></span></div>證件照 (35:45)</button>
+    <button class="ratio-btn" onclick="setRatio(2/1, this)"><div class="icon-box"><span class="ratio-icon icon-2-1"></span></div>橫向長方型 (2:1)</button>
+    <button class="ratio-btn" onclick="setRatio(1/2, this)"><div class="icon-box"><span class="ratio-icon icon-1-2"></span></div>直向長方型 (1:2)</button>
+    <button class="ratio-btn" onclick="setRatio(4/3, this)"><div class="icon-box"><span class="ratio-icon icon-4-3"></span></div>橫向拍立得 (4:3)</button>
+    <button class="ratio-btn" onclick="setRatio(3/4, this)"><div class="icon-box"><span class="ratio-icon icon-3-4"></span></div>直向拍立得 (3:4)</button>
+    
+    <h3>自定義比例</h3>
+    <div class="custom-ratio-group">
+        <input type="number" id="ratioX" value="16"><span>:</span><input type="number" id="ratioY" value="9">
+        <button class="btn-apply" onclick="applyCustomRatio()">套用</button>
+    </div>
+    <button class="btn-download" onclick="downloadResult()">確認裁切並下載</button>
+</div>
+
+<div class="main-content">
+    <div class="img-container">
+        <div id="placeholder-text">等待上傳圖片...</div>
+        <img id="target-image" src="">
+    </div>
+</div>
+
+<div id="result-modal">
+    <p id="modal-tip" style="color:white; margin-bottom:15px; font-size:16px; text-align:center; line-height:1.5;"></p>
+    <img id="modal-img" src="">
+    <div id="shopee-actions" style="display:none; flex-direction:column; align-items:center;">
+        <button class="btn-copy" onclick="copyCurrentUrl(this)">點此複製網址</button>
+        <p style="color:#fbbf24; font-size:13px;">複製網址後，請至 Chrome 或 Safari 開啟</p>
+    </div>
+    <button onclick="document.getElementById('result-modal').style.display='none'" style="padding:10px 30px; background:#666; color:#fff; border:none; border-radius:8px; cursor:pointer;">關閉預覽</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+
+<script>
+    let cropper;
+    const image = document.getElementById('target-image');
+    const input = document.getElementById('upload-input');
+    const sidebar = document.getElementById('sidebar');
+    const placeholder = document.getElementById('placeholder-text');
+    let currentAspectRatio = 35/45;
+
+    function toggleSidebar() { sidebar.classList.toggle('collapsed'); }
+    function clearImage() {
+        if (cropper) { cropper.destroy(); cropper = null; }
+        image.src = ""; image.style.opacity = "0"; placeholder.style.display = "block"; input.value = "";
+    }
+
+    image.onload = function() {
+        if (!image.src || image.src.length < 10) return;
+        placeholder.style.display = "none"; image.style.opacity = "1";
+        if (cropper) cropper.destroy();
+        cropper = new Cropper(image, { aspectRatio: currentAspectRatio, viewMode: 1, dragMode: 'move', autoCropArea: 0.8, responsive: true, checkOrientation: true });
+        if (window.innerWidth <= 768) sidebar.classList.add('collapsed');
+    };
+
+    input.onchange = function (e) {
+        const files = e.target.files;
+        if (files && files.length > 0) {
+            if (image.src.startsWith('blob:')) URL.revokeObjectURL(image.src);
+            image.src = URL.createObjectURL(files[0]);
+        }
+    };
+
+    function setRatio(ratio, btn) {
+        currentAspectRatio = ratio;
+        if (cropper) cropper.setAspectRatio(ratio);
+        document.querySelectorAll('.ratio-btn').forEach(b => b.classList.remove('active'));
+        if(btn) btn.classList.add('active');
+        if (window.innerWidth <= 768) sidebar.classList.add('collapsed');
+    }
+
+    function applyCustomRatio() {
+        const x = parseFloat(document.getElementById('ratioX').value);
+        const y = parseFloat(document.getElementById('ratioY').value);
+        if (x > 0 && y > 0) setRatio(x / y);
+    }
+
+    // 修改：增加文字變更回饋
+    function copyCurrentUrl(btn) {
+        const dummy = document.createElement('input');
+        document.body.appendChild(dummy);
+        dummy.value = window.location.href;
+        dummy.select();
+        document.execCommand('copy');
+        document.body.removeChild(dummy);
+        
+        // 變更按鈕文字
+        const originalText = btn.innerText;
+        btn.innerText = "已複製";
+        setTimeout(() => {
+            btn.innerText = originalText;
+        }, 2000);
+    }
+
+    async function downloadResult() {
+        if (!cropper) { alert("請先上傳圖片！"); return; }
+        const canvas = cropper.getCroppedCanvas({ width: 1200, imageSmoothingQuality: 'high' });
+
+        const ua = navigator.userAgent.toLowerCase();
+        const isLine = ua.indexOf('line') > -1;
+        const isShopee = ua.indexOf('shopee') > -1;
+        const isInApp = isLine || isShopee;
+
+        canvas.toBlob(async (blob) => {
+            const blobUrl = URL.createObjectURL(blob);
+
+            if (isInApp) {
+                // 優先嘗試 Web Share API
+                if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], 'crop.jpg', { type: 'image/jpeg' })] })) {
+                    try {
+                        const file = new File([blob], `EPD_${Date.now()}.jpg`, { type: 'image/jpeg' });
+                        await navigator.share({ files: [file], title: '裁切結果', text: '請儲存圖片' });
+                        return;
+                    } catch (err) { console.log('Share failed', err); }
+                }
+
+                const modal = document.getElementById('result-modal');
+                const modalImg = document.getElementById('modal-img');
+                const modalTip = document.getElementById('modal-tip');
+                const shopeeActions = document.getElementById('shopee-actions');
+                
+                modalImg.src = blobUrl;
+                shopeeActions.style.display = isShopee ? 'flex' : 'none';
+                
+                if (isLine) {
+                    modalTip.innerHTML = "偵測到 LINE 限制下載。<br><strong>請長按圖片儲存</strong>，或點選<br><strong>右下角「⋮」圖示</strong>選擇「在瀏覽器開啟」。";
+                } else if (isShopee) {
+                    modalTip.innerHTML = "<strong>蝦皮 App 限制下載與儲存</strong><br>請點擊下方按鈕複製網址<br>並改用 Chrome 或 Safari 開啟。";
+                }
+                
+                modal.style.display = 'flex';
+            } else {
+                const link = document.createElement('a');
+                link.download = `EPD_Crop_${Date.now()}.jpg`;
+                link.href = blobUrl;
+                link.click();
+            }
+        }, 'image/jpeg', 0.92);
+    }
+</script>
+</body>
+</html>
